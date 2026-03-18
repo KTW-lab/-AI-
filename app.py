@@ -9,6 +9,17 @@ from langchain_community.vectorstores import FAISS
 from langchain_community.document_loaders import PyPDFLoader, TextLoader, CSVLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
+# Optional dependencies for Office docs (installed as needed)
+try:
+    from docx import Document  # python-docx
+except Exception:  # pragma: no cover
+    Document = None
+
+try:
+    from pptx import Presentation  # python-pptx
+except Exception:  # pragma: no cover
+    Presentation = None
+
 # ==========================================
 # 1. 세션 상태 초기화
 # ==========================================
@@ -34,10 +45,12 @@ with st.sidebar:
     factory_filter = st.selectbox("검색할 공장/라인", ["전체 공장", "울산 공장 (A)", "아산 공장 (B)", "해외 법인"])
 
     st.header("📁 실무 문서 업로드")
-    st.caption("지원 포맷: PDF, TXT, CSV, 엑셀(XLSX)")
+    st.caption(
+        "지원 포맷: PDF, TXT, CSV, 엑셀(XLSX/XLS), Word(DOCX), PowerPoint(PPTX)"
+    )
     uploaded_files = st.file_uploader(
         "매뉴얼, PFMEA, MES 불량 데이터 등 업로드",
-        type=["pdf", "txt", "csv", "xlsx"],
+        type=["pdf", "txt", "csv", "xlsx", "xls", "docx", "ppt", "pptx"],
         accept_multiple_files=True,
     )
 
@@ -129,6 +142,66 @@ def load_documents(uploaded_files):
                     loaded_docs = loader.load()
                     for d in loaded_docs:
                         d.metadata["source"] = f"[엑셀데이터] {orig_name}"
+                    docs.extend(loaded_docs)
+
+            elif ext == "docx":
+                if Document is None:
+                    st.error(
+                        "Word(.docx) 파일을 읽으려면 추가 패키지가 필요합니다: pip install python-docx"
+                    )
+                    continue
+
+                try:
+                    doc = Document(path)
+                    text_data = "\n".join([p.text for p in doc.paragraphs if p.text])
+                except Exception as e:
+                    st.error(f"Word 로드 실패 ({orig_name}): {e}")
+                    continue
+
+                with tempfile.NamedTemporaryFile(
+                    delete=False, suffix=".txt", mode="w", encoding="utf-8"
+                ) as txt_tmp:
+                    txt_tmp.write(text_data)
+                    loader = TextLoader(txt_tmp.name, encoding="utf-8")
+                    loaded_docs = loader.load()
+                    for d in loaded_docs:
+                        d.metadata["source"] = f"[Word] {orig_name}"
+                    docs.extend(loaded_docs)
+
+            elif ext in ["ppt", "pptx"]:
+                # NOTE: python-pptx supports pptx only. ppt is not supported.
+                if ext == "ppt":
+                    st.error(
+                        "PowerPoint(.ppt) 형식은 직접 파싱이 어렵습니다. .pptx로 저장 후 업로드해 주세요."
+                    )
+                    continue
+
+                if Presentation is None:
+                    st.error(
+                        "PowerPoint(.pptx) 파일을 읽으려면 추가 패키지가 필요합니다: pip install python-pptx"
+                    )
+                    continue
+
+                try:
+                    pres = Presentation(path)
+                    lines = []
+                    for slide in pres.slides:
+                        for shape in slide.shapes:
+                            if hasattr(shape, "text") and shape.text:
+                                lines.append(shape.text)
+                    text_data = "\n".join(lines)
+                except Exception as e:
+                    st.error(f"PPTX 로드 실패 ({orig_name}): {e}")
+                    continue
+
+                with tempfile.NamedTemporaryFile(
+                    delete=False, suffix=".txt", mode="w", encoding="utf-8"
+                ) as txt_tmp:
+                    txt_tmp.write(text_data)
+                    loader = TextLoader(txt_tmp.name, encoding="utf-8")
+                    loaded_docs = loader.load()
+                    for d in loaded_docs:
+                        d.metadata["source"] = f"[PPTX] {orig_name}"
                     docs.extend(loaded_docs)
         except Exception as e:
             st.error(f"파일 로드 실패 ({orig_name}): {e}")

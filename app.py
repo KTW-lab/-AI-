@@ -211,6 +211,18 @@ def load_documents(uploaded_files):
     splitter = RecursiveCharacterTextSplitter(chunk_size=400, chunk_overlap=50)
     splits = splitter.split_documents(docs)
 
+    # 로딩/분할 결과가 비어있으면(예: 모든 파일 로드 실패, 내용이 전부 빈 문서)
+    # FAISS 생성 시 내부에서 IndexError가 날 수 있으므로 여기서 안전하게 중단
+    if len(splits) == 0:
+        st.warning(
+            "업로드된 파일에서 인덱싱할 텍스트를 추출하지 못했습니다.\n"
+            "- 파일이 비어있거나(텍스트 없음)\n"
+            "- 모든 파일 로드가 실패했거나\n"
+            "- PPTX/Word에서 텍스트가 추출되지 않았을 수 있습니다.\n\n"
+            "오류 메시지를 확인하고 다른 파일로 다시 시도해 주세요."
+        )
+        return None, None
+
     # 임베딩 및 DB 생성
     embeddings = OllamaEmbeddings(model=EMBEDDING_MODEL_NAME)
     vectorstore = FAISS.from_documents(splits, embeddings)

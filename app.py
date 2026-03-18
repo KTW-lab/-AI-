@@ -85,8 +85,8 @@ def model_exists(models: list[str], base_name: str) -> bool:
 # ==========================================
 # 2. 페이지 기본 UI
 # ==========================================
-st.set_page_config(page_title="서연이화 AI 시스템", layout="wide", page_icon="🏭")
-st.title("서연이화 AI 시스템")
+st.set_page_config(page_title="🏭 서연이화 AI 시스템", layout="wide", page_icon="🏭")
+st.title("🏭 서연이화 AI 시스템")
 
 
 # ==========================================

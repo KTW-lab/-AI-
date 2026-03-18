@@ -19,8 +19,12 @@ if "llm" not in st.session_state:
 if "retriever" not in st.session_state:
     st.session_state.retriever = None
 
-st.set_page_config(page_title="서연이화 생산기술 AI", layout="wide", page_icon="🏭")
-st.title("🏭 서연이화 생산기술 문서/데이터 분석 AI")
+# 모델 표기용 (사이드바 하단에 표시)
+LLM_MODEL_NAME = "llama3.1"
+EMBEDDING_MODEL_NAME = "nomic-embed-text"
+
+st.set_page_config(page_title="서연이화 AI 시스템", layout="wide", page_icon="🏭")
+st.title("서연이화 AI 시스템")
 
 # ==========================================
 # 2. 사이드바 - 설정 및 업로드
@@ -55,6 +59,11 @@ with st.sidebar:
         st.session_state.llm = None
         st.session_state.retriever = None
         st.rerun()
+
+    st.divider()
+    st.caption(
+        f"🤖 LLM: {LLM_MODEL_NAME} | Embedding: {EMBEDDING_MODEL_NAME}"
+    )
 
 
 # ==========================================
@@ -118,11 +127,11 @@ def load_documents(uploaded_files):
     splits = splitter.split_documents(docs)
 
     # 임베딩 및 DB 생성
-    embeddings = OllamaEmbeddings(model="nomic-embed-text")
+    embeddings = OllamaEmbeddings(model=EMBEDDING_MODEL_NAME)
     vectorstore = FAISS.from_documents(splits, embeddings)
 
     # Temperature 0.0으로 설정하여 지어내는 현상(환각) 원천 차단
-    llm = OllamaLLM(model="llama3.1", temperature=0.0)
+    llm = OllamaLLM(model=LLM_MODEL_NAME, temperature=0.0)
 
     # 정확도(유사도)가 높은 문서 최대 5개 추출
     retriever = vectorstore.as_retriever(search_kwargs={"k": 5})

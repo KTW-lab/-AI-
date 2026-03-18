@@ -107,7 +107,19 @@ def load_documents(uploaded_files):
                 docs.extend(loaded_docs)
             elif ext in ["xls", "xlsx"]:
                 # 엑셀 처리
-                df = pd.read_excel(path)
+                try:
+                    df = pd.read_excel(path)
+                except ImportError as ie:
+                    st.error(
+                        "엑셀(.xlsx) 파일을 읽으려면 추가 패키지가 필요합니다. "
+                        "다음을 설치한 뒤 다시 시도하세요: pip install openpyxl"
+                    )
+                    st.caption(f"상세 오류: {ie}")
+                    continue
+                except Exception as e:
+                    st.error(f"엑셀 로드 실패 ({orig_name}): {e}")
+                    continue
+
                 text_data = df.to_string()
                 with tempfile.NamedTemporaryFile(
                     delete=False, suffix=".txt", mode="w", encoding="utf-8"

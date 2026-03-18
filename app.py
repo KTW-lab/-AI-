@@ -3,6 +3,10 @@ import os
 import tempfile
 import pandas as pd
 from typing import List, Dict
+import sys
+import concurrent.futures
+
+import requests
 
 from langchain_ollama import OllamaLLM, OllamaEmbeddings
 from langchain_community.vectorstores import FAISS
@@ -74,9 +78,29 @@ with st.sidebar:
         st.rerun()
 
     st.divider()
-    st.caption(
-        f"🤖 LLM: {LLM_MODEL_NAME} | Embedding: {EMBEDDING_MODEL_NAME}"
-    )
+    st.caption(f"🤖 LLM: {LLM_MODEL_NAME} | Embedding: {EMBEDDING_MODEL_NAME}")
+
+    # Ollama 연결/모델 상태 표시 (대기 무한정 문제 디버깅용)
+    st.caption("🧪 Ollama 상태 체크")
+    try:
+        r = requests.get("http://localhost:11434/api/tags", timeout=2)
+        if r.ok:
+            models = [m.get("name", "") for m in r.json().get("models", [])]
+            st.caption(f"✅ Ollama 연결됨 (모델 {len(models)}개)")
+            st.caption(f"- LLM 존재: {LLM_MODEL_NAME in models}")
+            st.caption(f"- Embedding 존재: {EMBEDDING_MODEL_NAME in models}")
+        else:
+            st.caption(f"⚠️ Ollama 응답 오류: HTTP {r.status_code}")
+    except Exception as e:
+        st.caption(f"❌ Ollama 연결 실패: {e}")
+        st.caption("→ 터미널에서 `ollama serve` 실행 및 모델 설치(ollama pull) 확인")
+
+    with st.expander("⚙️ 실행 환경(디버그)"):
+        st.write({
+            "python_executable": sys.executable,
+            "python_version": sys.version,
+            "pandas": getattr(pd, "__version__", "unknown"),
+        })
 
 
 # ==========================================
@@ -323,8 +347,25 @@ if st.session_state.llm:
 
 정확하고 검증된 답변:"""
 
-                        # 4. 답변 생성 및 출력
-                        answer = st.session_state.llm.invoke(full_prompt)
+                        # 4. 답변 생성 및 출력 (무한 대기 방지를 위해 타임아웃 적용)
+                        def _run_llm():
+                            return st.session_state.llm.invoke(full_prompt)
+
+                        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
+                            future = ex.submit(_run_llm)
+                            try:
+                                answer = future.result(timeout=120)
+                            except concurrent.futures.TimeoutError:
+                                answer = (
+                                    "⚠️ LLM 응답이 지연되고 있습니다(120초 타임아웃).\n\n"
+                                    "확인사항:\n"
+                                    "1) Ollama가 실행 중인지 (ollama serve)\n"
+                                    "2) 모델이 설치되어 있는지 (ollama list / ollama pull)\n"
+                                    "3) PC 사양 대비 모델이 무거운지\n"
+                                )
+                            except Exception as e:
+                                answer = f"LLM 호출 중 오류: {e}"
+
                         st.markdown(answer)
 
                         # 5. 사용자가 직접 원문을 검증할 수 있는 토글 UI 제공
